@@ -28,5 +28,14 @@ class Backend(unittest.TestCase):
   req=urllib.request.Request(self.url+'/api/health',headers={'Origin':'null','Cookie':'companion_session='+m.TOKEN})
   with self.assertRaises(urllib.error.HTTPError) as error:urllib.request.urlopen(req)
   self.assertEqual(error.exception.code,401)
+ def test_local_routes_without_deepseek(self):
+  old_stt,old_tts=m.transcribe,m.synthesize
+  try:
+   m.transcribe=lambda audio:'天猫精灵';m.synthesize=lambda text:'local-audio'
+   self.assertEqual(self.call('/api/transcribe',body={'audio':'UklGRg=='})[1]['transcript'],'天猫精灵')
+   self.assertEqual(self.call('/api/speak',body={'text':'我在'})[1]['audio'],'local-audio')
+   self.assertEqual(self.call('/api/transcribe',body={'audio':'???'})[0],400)
+   self.assertEqual(self.call('/api/speak',False,body={'text':'我在'})[0],401)
+  finally:m.transcribe,m.synthesize=old_stt,old_tts
  def test_no_files(self):self.assertEqual(self.call('/.env.local')[0],404)
 if __name__=='__main__':unittest.main()
