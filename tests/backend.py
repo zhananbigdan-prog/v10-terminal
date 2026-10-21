@@ -20,5 +20,13 @@ class Backend(unittest.TestCase):
   code,body=self.call('/api/health');self.assertEqual(code,200);self.assertFalse(body['deepseek'])
  def test_missing_key(self):
   code,body=self.call('/api/chat',body={'text':'你好'});self.assertEqual(code,400);self.assertIn('密钥',body['error'])
+ def test_paired_bearer_without_cookie(self):
+  req=urllib.request.Request(self.url+'/api/health',headers={'Origin':'null','Authorization':'Bearer '+m.browser_token()})
+  with urllib.request.urlopen(req) as r:
+   self.assertEqual(r.status,200);self.assertEqual(r.headers['Access-Control-Allow-Origin'],'null')
+ def test_opaque_cookie_without_bearer_rejected(self):
+  req=urllib.request.Request(self.url+'/api/health',headers={'Origin':'null','Cookie':'companion_session='+m.TOKEN})
+  with self.assertRaises(urllib.error.HTTPError) as error:urllib.request.urlopen(req)
+  self.assertEqual(error.exception.code,401)
  def test_no_files(self):self.assertEqual(self.call('/.env.local')[0],404)
 if __name__=='__main__':unittest.main()
