@@ -1,19 +1,37 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#eaf4ff"><title>小蓝 · 化妆桌上的 AI 伙伴</title><link rel="stylesheet" href="styles.css?v=5"></head>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#eaf4ff"><title>小蓝 · 化妆桌上的 AI 伙伴</title><link rel="stylesheet" href="styles.css?v=6"></head>
 <body>
 <div id="app" class="shell">
  <header class="topbar"><div class="brand"><span class="brand-dot"></span><b id="brandName">小蓝</b><span class="tag">你的早晨搭子</span></div><nav><button id="fullscreen" class="iconbtn">全屏</button><button id="sleepNow" class="iconbtn">晚安</button><button id="settingsOpen" class="iconbtn" aria-label="打开设置">设置</button></nav></header>
  <main class="dashboard">
   <section class="companion">
    <div class="eyebrow"><span id="dateText">今天</span><span id="connection" class="connection">AI 尚未连接</span></div>
-   <div id="avatar" class="avatar idle" role="img" aria-label="会眨眼的小蓝机器人"><div class="halo halo-one"></div><div class="halo halo-two"></div>
-    <svg viewBox="0 0 320 280" aria-hidden="true"><defs><linearGradient id="bodyBlue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#effaff"/><stop offset=".55" stop-color="#b8dcff"/><stop offset="1" stop-color="#82b7f1"/></linearGradient></defs><ellipse class="shadow" cx="160" cy="255" rx="70" ry="9" fill="#b3cbe4" opacity=".35"/><g class="robot"><path d="M73 96C76 41 122 19 170 25C224 20 257 59 251 111C275 151 251 211 211 224C189 249 131 246 105 224C59 214 44 171 58 135Z" fill="url(#bodyBlue)" stroke="#77a8d8" stroke-width="2"/><path d="M84 90C100 54 120 44 153 42" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" opacity=".8"/><g class="face"><g class="eyes"><rect x="112" y="113" width="23" height="44" rx="12" fill="#173453"/><rect x="181" y="113" width="23" height="44" rx="12" fill="#173453"/></g><ellipse cx="98" cy="169" rx="13" ry="6" fill="#eeabc3" opacity=".5"/><ellipse cx="219" cy="169" rx="13" ry="6" fill="#eeabc3" opacity=".5"/></g><path class="mouth" d="M149 180Q159 189 170 180" fill="none" stroke="#497499" stroke-width="3.5" stroke-linecap="round"/></g><path class="spark" d="M270 45L274 57L286 61L274 65L270 77L266 65L254 61L266 57Z" fill="#86b9ee"/></svg>
+   <div id="avatar" class="avatar idle" role="img" aria-label="流动的蓝白语音圆球">
+    <svg class="voice-orb" viewBox="0 0 320 280" aria-hidden="true">
+     <defs>
+      <radialGradient id="orbBase" cx=".3" cy=".2" r=".9"><stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#effaff"/><stop offset="1" stop-color="#a5d4fa"/></radialGradient>
+      <linearGradient id="waveBlue" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#d8f3ff"/><stop offset=".45" stop-color="#73c6f7"/><stop offset="1" stop-color="#468ce8"/></linearGradient>
+      <linearGradient id="waveWhite" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#effaff" stop-opacity=".5"/></linearGradient>
+      <clipPath id="orbClip"><circle cx="160" cy="137" r="105"/></clipPath>
+     </defs>
+     <g class="orb-body">
+      <circle class="orb-aura" cx="160" cy="137" r="116" fill="#d7ecfb" opacity=".35"/>
+      <circle cx="160" cy="137" r="105" fill="url(#orbBase)"/>
+      <g clip-path="url(#orbClip)">
+       <g class="orb-wave wave-back"><path d="M-170 114C-110 59 -55 59 5 114S120 169 180 114S295 59 355 114S470 169 530 114S645 59 705 114V320H-170Z" fill="url(#waveBlue)" opacity=".7"/></g>
+       <g class="orb-wave wave-middle"><path d="M-170 140C-110 91 -55 91 5 140S120 189 180 140S295 91 355 140S470 189 530 140S645 91 705 140V320H-170Z" fill="url(#waveWhite)"/></g>
+       <g class="orb-wave wave-front"><path d="M-170 175C-110 130 -55 130 5 175S120 220 180 175S295 130 355 175S470 220 530 175S645 130 705 175V320H-170Z" fill="#6eb9f0" opacity=".55"/></g>
+       <g class="orb-wave wave-glint"><path d="M-170 198C-110 164 -55 164 5 198S120 232 180 198S295 164 355 198S470 232 530 198S645 164 705 198V320H-170Z" fill="#fff" opacity=".8"/></g>
+      </g>
+      <circle cx="160" cy="137" r="104.5" fill="none" stroke="#fff" stroke-opacity=".55"/>
+     </g>
+    </svg>
    </div>
    <div id="stateLabel" class="state-label">在这里陪着你</div>
    <h1 id="headline">慢慢来，今天也很好看。</h1>
    <p id="subtitle">点一下说话，或者先看看今天穿什么。</p>
    <div class="voice-controls"><button id="talk" class="talk">开始说话 <span>●</span></button><button id="stopSpeech" class="quietbtn">停止播放</button></div>
-   <div class="meter"><div id="meterFill"></div></div><p id="recordInfo" class="microcopy">V5 · 本地录音已验证 · AI 服务待连接</p>
+   <div class="meter"><div id="meterFill"></div></div><p id="recordInfo" class="microcopy">V6 · 本地录音已验证 · AI 服务待连接</p>
    <div class="quick-actions"><button id="askWeather">今天穿什么？</button><button id="greet">和我打个招呼</button><button id="replay" disabled>回放我的录音</button></div>
    <audio id="audio" controls style="display:none;width:100%"></audio>
   </section>
@@ -32,4 +50,4 @@
  <button class="talk save" type="submit">保存设置</button><p id="saveResult" class="microcopy"></p>
  </form><button id="connectTest" class="quietbtn">检查服务连接</button></div></section>
 <div id="night" class="night" hidden role="button" tabindex="0" aria-label="夜间黑屏，点击临时唤醒"></div>
-<script src="core.js?v=5"></script><script src="app.js?v=5"></script></body></html>
+<script src="core.js?v=6"></script><script src="app.js?v=6"></script></body></html>
