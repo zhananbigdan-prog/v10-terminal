@@ -44,19 +44,27 @@
 <body>
 <div class="app">
   <header class="toolbar">
-    <div class="toolbar-title">V10 TEST v3 · 操作按钮</div>
+    <div class="toolbar-title">V10 TEST v4 · 操作按钮</div>
     <div class="bottom-bar">
       <button class="secondary" id="btnFullscreen">⛶ 全屏</button>
       <button class="primary" id="btnMic">🎙️ 钉钉录音测试</button>
       <button class="primary" id="btnWebMic">🎤 网页麦克风测试</button>
       <button class="secondary" id="btnCamera">📷 开启摄像头</button>
     </div>
+    <div style="margin:8px 1%;padding:8px;background:#0d1219;border-radius:8px">
+      <div style="height:12px;background:#253044;border-radius:6px;overflow:hidden" role="img" aria-label="实时输入音量">
+        <div id="levelFill" style="height:12px;width:0%;background:#53d98c"></div>
+      </div>
+      <div id="recInfo" style="font-size:14px;line-height:1.5;margin-top:6px" aria-live="polite">先录音 → 停止生成 WAV → 回放</div>
+    </div>
+    <button class="primary" id="btnReplay" disabled style="width:98%">▶ 回放录音</button>
+    <audio id="playback" controls style="display:none;width:98%;margin:1%"></audio>
   </header>
   <section class="panel left">
     <div class="camera-wrap">
       <video id="video" autoplay playsinline muted></video>
       <div class="camera-overlay">
-        <div class="pill">V10 TEST v3</div>
+        <div class="pill">V10 TEST v4</div>
         <div class="pill" id="clock">--:--</div>
       </div>
     </div>
@@ -80,7 +88,6 @@
 
     <div class="transcript">
       <h2>测试结果 / 语音转文字</h2>
-      <audio id="playback" controls style="display:none;width:100%"></audio>
       <div id="text">录音成功后，如果当前钉钉 H5 微应用拥有 JSAPI 权限，这里会显示识别文字。</div>
     </div>
 
@@ -250,78 +257,147 @@
     if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
   });
 
-  // Browser microphone probe: local only, no upload or transcription.
-  let webStream = null, webRecorder = null, webTimer = null, audioURL = null;
-  let webPending = false, webCancelled = false;
-  function releaseWebMic() {
-    clearTimeout(webTimer);
-    if (webStream) webStream.getTracks().forEach(t => t.stop());
-    webStream = null;
-    $('btnWebMic').textContent = '🎤 网页麦克风测试';
-    $('btnMic').disabled = false;
+  // Legacy V10 capture: Web Audio -> mono PCM16 WAV, entirely in memory.
+  let capture = null, captureSerial = 0, audioURL = null;
+  function cleanupCapture(session) {
+    clearTimeout(session.timer); clearTimeout(session.requestTimer);
+    if (session.processor) session.processor.onaudioprocess = null;
+    [session.source, session.processor, session.gain].forEach(node => {
+      if (node) { try { node.disconnect(); } catch (e) {} }
+    });
+    if (session.stream) session.stream.getTracks().forEach(t => t.stop());
+    if (session.context) { try { Promise.resolve(session.context.close()).catch(() => {}); } catch (e) {} }
+    session.blocks = [];
+    if (capture === session) {
+      capture = null;
+      $('btnWebMic').disabled = false;
+      $('btnWebMic').textContent = '🎤 网页麦克风测试';
+      $('btnMic').disabled = false;
+    }
   }
-  function stopWebMic() {
-    if (webRecorder && webRecorder.state !== 'inactive') webRecorder.stop();
-    else set('sWebMic', '音轨已关闭；此浏览器无录音编码器', 'warn');
-    releaseWebMic();
+  function encodeWav(blocks, samples, sampleRate) {
+    const buffer = new ArrayBuffer(44 + samples * 2);
+    const view = new DataView(buffer);
+    const write = (offset, text) => { for (let i=0;i<text.length;i++) view.setUint8(offset+i,text.charCodeAt(i)); };
+    write(0,'RIFF'); view.setUint32(4,36+samples*2,true); write(8,'WAVE');
+    write(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+    view.setUint16(22,1,true); view.setUint32(24,sampleRate,true);
+    view.setUint32(28,sampleRate*2,true); view.setUint16(32,2,true); view.setUint16(34,16,true);
+    write(36,'data'); view.setUint32(40,samples*2,true);
+    let offset=44;
+    blocks.forEach(block => { for (let i=0;i<block.length;i++) {
+      const value=Math.max(-1,Math.min(1,block[i]));
+      view.setInt16(offset,Math.round(value<0 ? value*32768 : value*32767),true); offset+=2;
+    }});
+    return new Blob([buffer],{type:'audio/wav'});
   }
-  $('btnWebMic').addEventListener('click', async () => {
-    if (webStream) { stopWebMic(); return; }
-    if (webPending) return;
-    webPending = true; webCancelled = false;
-    $('btnWebMic').disabled = true; $('btnMic').disabled = true;
-    set('sWebMic', '请求系统麦克风权限…', 'warn');
-    let requestTimer = setTimeout(() => {
-      webCancelled = true;
-      set('sWebMic', '30秒未响应：请关闭网页后重试或检查系统权限', 'bad');
-    }, 30000);
+  function stopCapture(save) {
+    const session=capture;
+    if (!session) return;
+    session.cancelled=true;
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('当前浏览器未开放麦克风接口');
-      const stream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
-      if (webCancelled) { stream.getTracks().forEach(t => t.stop()); return; }
-      clearTimeout(requestTimer);
-      webStream = stream;
-      const track = stream.getAudioTracks()[0];
-      if (!track) throw new Error('没有返回音频轨道');
-      set('sWebMic', '已获得音轨；请说话后停止并回放验证', 'warn');
-      $('text').textContent = '录音仅保存在当前网页内存，不上传。请说一句话，再点停止；最多录制15秒。能回放听到声音，才算收音成功。';
-      if (window.MediaRecorder) {
-        const chunks = [];
-        const recorder = new MediaRecorder(stream);
-        webRecorder = recorder;
-        recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-        recorder.onstop = () => {
-          if (!chunks.length) { set('sWebMic', '未取得录音数据', 'bad'); return; }
+      if (save) {
+        if (!session.samples) {
+          set('sWebMic','没有收到音频数据；请查看下方说明','bad');
+          $('text').textContent='麦克风音轨已获得，但 Web Audio 没有回传采样。请拍下此状态，不能据此判断硬件损坏。';
+        } else {
+          const blob=encodeWav(session.blocks,session.samples,session.context.sampleRate);
           if (audioURL) URL.revokeObjectURL(audioURL);
-          audioURL = URL.createObjectURL(new Blob(chunks, {type:recorder.mimeType || chunks[0].type}));
-          $('playback').src = audioURL; $('playback').style.display = 'block';
-          set('sWebMic', '录音已生成，请点播放确认声音', 'ok');
-        };
-        recorder.onerror = e => { set('sWebMic', '编码失败：' + (e.error && e.error.message || '未知错误'), 'bad'); releaseWebMic(); };
-        recorder.start();
-      } else {
-        $('text').textContent = '已获得麦克风音轨，但当前浏览器没有 MediaRecorder，暂不能回放验证。此结果还不能证明有声音。';
+          audioURL=URL.createObjectURL(blob);
+          $('playback').src=audioURL; $('playback').style.display='block'; $('playback').load();
+          $('btnReplay').disabled=false;
+          const seconds=(session.samples/session.context.sampleRate).toFixed(1);
+          set('sWebMic','已生成 '+seconds+' 秒 WAV；点顶部“回放录音”',session.peak>0.001 ? 'ok':'warn');
+          $('recInfo').textContent='已保存 '+seconds+' 秒 · '+Math.round(blob.size/1024)+' KB'+(session.peak<=0.001 ? ' · 信号很弱或静音':' · 请回放核对声音');
+          $('text').textContent='录音已生成。点击顶部“▶ 回放录音”，确认是否能听到刚才的说话声。录音没有上传，退出网页会丢失。';
+        }
       }
-      $('btnWebMic').textContent = '⏹ 停止网页录音';
-      webTimer = setTimeout(stopWebMic, 15000);
-    } catch (e) {
-      set('sWebMic', e.name + ': ' + e.message, 'bad');
-      $('text').textContent = '网页麦克风未通过。请拍下右侧错误；摄像头能用不代表麦克风权限也已开放。';
-      releaseWebMic();
-    } finally {
-      clearTimeout(requestTimer); webPending = false; $('btnWebMic').disabled = false;
-      if (!webStream) $('btnMic').disabled = false;
+    } catch(e) { set('sWebMic','生成 WAV 失败：'+e.message,'bad'); }
+    finally { cleanupCapture(session); }
+  }
+  $('btnReplay').addEventListener('click', async () => {
+    if (!audioURL) return;
+    try {
+      const audio=$('playback'); audio.pause(); audio.currentTime=0;
+      audio.volume=1; audio.muted=false;
+      await audio.play(); $('recInfo').textContent='正在回放，请听 V10 扬声器';
+    } catch(e) { $('recInfo').textContent='回放失败：'+e.name+' / '+e.message; }
+  });
+  $('playback').addEventListener('ended', () => { $('recInfo').textContent='回放结束；可再次点击回放'; });
+  $('playback').addEventListener('error', () => {
+    if (audioURL) $('recInfo').textContent='播放器错误：'+($('playback').error && $('playback').error.code || '未知');
+  });
+  $('btnWebMic').addEventListener('click', async () => {
+    if (capture) { stopCapture(capture.active); return; }
+    const session={id:++captureSerial,blocks:[],samples:0,peak:0,active:false,cancelled:false,lastUI:0};
+    capture=session;
+    $('playback').pause(); $('btnReplay').disabled=true;
+    $('btnMic').disabled=true;
+    $('btnWebMic').textContent='取消麦克风请求';
+    set('sWebMic','正在请求麦克风…','warn');
+    $('levelFill').style.width='0%'; $('recInfo').textContent='等待麦克风权限，最长30秒';
+    session.requestTimer=setTimeout(() => {
+      if (capture!==session) return;
+      session.cancelled=true; cleanupCapture(session);
+      set('sWebMic','请求超时，已取消；请检查麦克风权限','bad');
+    },30000);
+    try {
+      const AudioContextClass=window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) throw new Error('此浏览器没有 Web Audio');
+      session.context=new AudioContextClass();
+      // Resume in the user gesture; do not let resume wait block permission requests.
+      const resume=session.context.resume();
+      if (resume && resume.catch) resume.catch(() => {});
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('未开放网页麦克风接口');
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+      if (session.cancelled || capture!==session) { stream.getTracks().forEach(t=>t.stop()); return; }
+      session.stream=stream;
+      if (!stream.getAudioTracks().length) throw new Error('没有返回音频轨道');
+      clearTimeout(session.requestTimer);
+      if (!session.context.createScriptProcessor) throw new Error('没有兼容采样接口 createScriptProcessor');
+      session.source=session.context.createMediaStreamSource(stream);
+      session.processor=session.context.createScriptProcessor(4096,1,1);
+      session.gain=session.context.createGain(); session.gain.gain.value=0;
+      session.active=true;
+      session.processor.onaudioprocess=event => {
+        if (!session.active || session.cancelled) return;
+        const input=event.inputBuffer.getChannelData(0);
+        const remaining=session.context.sampleRate*15-session.samples;
+        if (remaining<=0) { stopCapture(true); return; }
+        const block=new Float32Array(input.subarray(0,Math.min(input.length,remaining)));
+        session.blocks.push(block); session.samples+=block.length;
+        let power=0,peak=0;
+        for(let i=0;i<block.length;i++) { power+=block[i]*block[i]; peak=Math.max(peak,Math.abs(block[i])); }
+        session.peak=Math.max(session.peak,peak);
+        // Never feed microphone samples to the speakers while recording.
+        event.outputBuffer.getChannelData(0).fill(0);
+        if (Date.now()-session.lastUI>100) {
+          session.lastUI=Date.now();
+          const rms=Math.sqrt(power/Math.max(1,block.length));
+          $('levelFill').style.width=Math.min(100,rms*500)+'%';
+          $('recInfo').textContent='已采集 '+(session.samples/session.context.sampleRate).toFixed(1)+' 秒 / 15 秒 · 音量 '+Math.round(rms*100)+'%';
+        }
+        if(session.samples>=session.context.sampleRate*15) stopCapture(true);
+      };
+      session.source.connect(session.processor); session.processor.connect(session.gain); session.gain.connect(session.context.destination);
+      $('btnWebMic').textContent='⏹ 停止并生成录音';
+      set('sWebMic','采集中；请说话，观察音量条','warn');
+      $('text').textContent='请说5秒，再点顶部“停止并生成录音”。音量条变化表示收到音频信号，但还需回放核对是否是你的说话声。';
+      session.timer=setTimeout(() => { if(capture===session) stopCapture(true); },15000);
+    } catch(e) {
+      if (capture!==session) return;
+      session.cancelled=true; cleanupCapture(session);
+      set('sWebMic',e.name+': '+e.message,'bad'); $('recInfo').textContent='采集失败，请拍下具体错误';
     }
   });
   window.addEventListener('pagehide', () => {
-    webCancelled = true;
-    if (webStream) stopWebMic();
-    if (audioURL) URL.revokeObjectURL(audioURL);
+    stopCapture(false);
+    if (audioURL) { URL.revokeObjectURL(audioURL); audioURL=null; }
   });
 
   // Try dd.ready if available
   try {
-    if (window.dd && typeof window.dd.ready === 'function') {
+    if (/DingTalk/i.test(navigator.userAgent) && window.dd && typeof window.dd.ready === 'function') {
       window.dd.ready(() => {
         ddReady = true;
         set('sDD', 'SDK 就绪；录音权限待实测', 'warn');
