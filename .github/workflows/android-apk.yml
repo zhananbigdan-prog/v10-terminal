@@ -5,6 +5,8 @@ on:
     paths:
       - 'android/**'
       - '.github/workflows/android-apk.yml'
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,3 +28,13 @@ jobs:
         with:
           name: v10-companion-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish test APK for direct download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk v10-companion-debug.apk
+          if gh release view v10-native-test-20261021 >/dev/null 2>&1; then
+            gh release upload v10-native-test-20261021 v10-companion-debug.apk --clobber
+          else
+            gh release create v10-native-test-20261021 v10-companion-debug.apk --target "$GITHUB_SHA" --title "V10 原生控制测试版" --notes "仅供 TG_S7A04 安装测试。安装、定时唤醒及系统屏保行为仍需实机确认。" --prerelease
+          fi
