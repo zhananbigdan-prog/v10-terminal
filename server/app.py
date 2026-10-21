@@ -1,6 +1,8 @@
 """Private local companion backend. Secrets stay here, never in the Pages site."""
 import base64, binascii, datetime, hmac, importlib.util, io, json, os, pathlib, shutil
-import subprocess, tempfile, threading, urllib.request, urllib.error, wave
+import subprocess, tempfile, threading, urllib.request, urllib.error, wave, time, secrets
+from http.cookies import SimpleCookie
+from urllib.parse import parse_qs, urlsplit
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -13,6 +15,13 @@ TOKEN = os.getenv('COMPANION_TOKEN', '')
 ALLOWED = os.getenv('COMPANION_ORIGIN', 'https://zhananbigdan-prog.github.io')
 MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek-flash')
 STT_MODEL = os.getenv('WHISPER_MODEL_PATH', '')
+PUBLIC_ORIGIN = os.getenv('COMPANION_PUBLIC_ORIGIN', '')
+PAIR_CODE = os.getenv('COMPANION_PAIR_CODE', '')
+PAIR_DEADLINE = time.time() + 1800
+PAIR_CSRF = secrets.token_urlsafe(32)
+PAIR_USED = False
+PAIR_ATTEMPTS = 0
+PAIR_LOCK = threading.Lock()
 MODEL_INSTANCE = None
 LOCK = threading.Lock()
 
@@ -95,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
         pass  # Do not log conversations, tokens, paths or audio.
 
     def origin_ok(self):
-        return self.headers.get('Origin') in (None, ALLOWED)
+        return self.headers.get('Origin') in (None, ALLOWED, PUBLIC_ORIGIN)
 
     def send_json(self, status, body):
         data = json.dumps(body, ensure_ascii=False).encode()
@@ -109,7 +118,55 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers(); self.wfile.write(data)
 
     def authorized(self):
-        return bool(TOKEN) and self.origin_ok() and hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + TOKEN)
+        if not TOKEN or not self.origin_ok():
+            return False
+        if hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + TOKEN):
+            return True
+        try:
+            cookie = SimpleCookie(self.headers.get('Cookie', ''))
+            return 'companion_session' in cookie and hmac.compare_digest(cookie['companion_session'].value, TOKEN)
+        except Exception:
+            return False
+
+    def send_page(self, body, mime='text/html; charset=utf-8'):
+        data = body.encode() if isinstance(body, str) else body
+        self.send_response(200)
+        self.send_header('Content-Type', mime)
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Referrer-Policy', 'no-referrer')
+        self.end_headers(); self.wfile.write(data)
+
+    def pair_page(self):
+        return self.send_page('''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>连接小蓝</title><style>body{background:#eff6fd;color:#345776;font:18px sans-serif;padding:40px 20px}main{max-width:440px;margin:auto;background:white;padding:28px;border-radius:20px}input,button{box-sizing:border-box;width:100%;padding:15px;font-size:22px;margin:12px 0;border-radius:10px;border:1px solid #caddeb}button{background:#456f98;color:white}p{font-size:14px;line-height:1.8;color:#8297a8}</style><main><h2>让小蓝连接这台屏幕</h2><p>输入这次提供的六位连接码。它不是 DeepSeek API 密钥。连接成功后会自动进入蓝白圆球页面。</p><form method="post" action="/pair"><input type="hidden" name="csrf" value="__PAIR_CSRF__"><input name="code" aria-label="六位连接码" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="六位连接码" required><button>连接这台屏幕</button></form><p>测试入口依赖 Mac 在线；连接码30分钟内有效，只能使用一次。</p></main></html>'''.replace('__PAIR_CSRF__', PAIR_CSRF))
+
+    def pair(self):
+        global PAIR_USED, PAIR_ATTEMPTS
+        if self.headers.get('Origin') not in (None, 'null', PUBLIC_ORIGIN):
+            return self.send_json(403, {'error': '请从小蓝连接页面提交'})
+        try:
+            size = int(self.headers.get('Content-Length', 0))
+            if not 0 < size < 400: raise ValueError()
+            form = parse_qs(self.rfile.read(size).decode())
+            if not hmac.compare_digest(form.get('csrf', [''])[0], PAIR_CSRF):
+                return self.send_json(403, {'error': '页面已过期，请刷新后连接'})
+            code = form.get('code', [''])[0]
+        except Exception:
+            return self.send_json(400, {'error': '无效连接码'})
+        with PAIR_LOCK:
+            if not PAIR_CODE or PAIR_USED or PAIR_ATTEMPTS >= 5 or time.time() > PAIR_DEADLINE:
+                return self.send_json(403, {'error': '连接码已失效，请回到聊天获取新连接码'})
+            PAIR_ATTEMPTS += 1
+            if not hmac.compare_digest(code, PAIR_CODE):
+                return self.send_json(403, {'error': '连接码不正确，请返回重试'})
+            PAIR_USED = True
+        self.send_response(303)
+        self.send_header('Location', '/')
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Set-Cookie', 'companion_session=' + TOKEN + '; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000')
+        self.end_headers()
+
 
     def do_OPTIONS(self):
         if not self.origin_ok():
@@ -122,13 +179,26 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        path = urlsplit(self.path).path
+        if path in ('/', '/index.html'):
+            if not self.authorized():
+                return self.pair_page()
+            page = (ROOT / 'index.html').read_text()
+            page = page.replace('<script src="core.js', '<script>window.COMPANION_COOKIE=true;window.COMPANION_ENDPOINT=location.origin;</script><script src="core.js', 1)
+            return self.send_page(page)
+        static = {'/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/core.js': ('core.js', 'text/javascript; charset=utf-8'), '/styles.css': ('styles.css', 'text/css; charset=utf-8'), '/diagnostics/v4.html': ('diagnostics/v4.html', 'text/html; charset=utf-8')}
+        if path in static:
+            name, mime = static[path]
+            return self.send_page((ROOT / name).read_bytes(), mime)
         if not self.authorized():
             return self.send_json(401, {'error': '访问口令无效或来源未允许'})
-        if self.path != '/api/health':
+        if path != '/api/health':
             return self.send_json(404, {'error': '接口不存在'})
         return self.send_json(200, {'deepseek': bool(KEY), 'stt': bool(STT_MODEL and pathlib.Path(STT_MODEL).is_dir() and importlib.util.find_spec('faster_whisper')), 'tts': bool(shutil.which('say') and shutil.which('afconvert'))})
 
     def do_POST(self):
+        if self.path == '/pair':
+            return self.pair()
         if not self.authorized():
             return self.send_json(401, {'error': '访问口令无效或来源未允许'})
         if self.path != '/api/chat':
