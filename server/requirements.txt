@@ -1,0 +1,2 @@
+# Only needed for local speech recognition. Backend and macOS TTS use stdlib.
+faster-whisper>=1.2,<2
