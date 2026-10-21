@@ -6,61 +6,61 @@
   <meta name="theme-color" content="#0a0d12" />
   <title>V10 AI Terminal</title>
   <style>
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin:0; width:100%; height:100%; background:#0a0d12; color:#fff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; overflow:auto; }
-    body { display:flex; align-items:stretch; justify-content:stretch; }
-    .app { width:100vw; height:100vh; display:grid; grid-template-columns: 1.25fr .75fr; gap:18px; padding:18px; }
-    .panel { background:#121720; border:1px solid #253044; border-radius:22px; overflow:hidden; }
-    .left { position:relative; display:flex; flex-direction:column; }
-    .camera-wrap { position:relative; flex:1; min-height:0; background:#05070a; }
-    video { width:100%; height:100%; object-fit:cover; background:#05070a; }
-    .camera-overlay { position:absolute; left:18px; top:18px; right:18px; display:flex; justify-content:space-between; align-items:center; pointer-events:none; }
-    .pill { background:rgba(8,12,18,.72); backdrop-filter: blur(12px); border:1px solid rgba(255,255,255,.12); border-radius:999px; padding:9px 14px; font-size:15px; }
-    .bottom-bar { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:14px; background:#0f141c; }
-    button { min-height:58px; border:0; border-radius:16px; font-size:18px; font-weight:700; cursor:pointer; }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html { margin:0; padding:0; width:100%; height:auto; min-height:100%; overflow-x:hidden; overflow-y:auto; background:#0a0d12; }
+    body { margin:0; padding:0; width:100%; height:auto; min-height:100%; color:#fff; font-family:Arial,"PingFang SC","Microsoft YaHei",sans-serif; overflow:visible; }
+    .app { display:block; width:100%; height:auto; padding:10px; }
+    .toolbar { margin:0 0 10px; padding:10px; background:#121720; border:1px solid #253044; border-radius:12px; }
+    .toolbar-title { margin:0 0 8px; font-size:17px; font-weight:bold; }
+    .bottom-bar { display:block; font-size:0; }
+    button { display:inline-block; vertical-align:top; width:48%; margin:1%; min-height:54px; padding:10px 4px; border:0; border-radius:9px; font-size:16px; font-weight:bold; cursor:pointer; white-space:normal; }
     button.primary { background:#fff; color:#111; }
     button.secondary { background:#253044; color:#fff; }
     button.recording { background:#ef4444; color:#fff; }
     button:disabled { opacity:.45; }
-    .right { padding:18px; display:flex; flex-direction:column; gap:14px; }
-    h1 { margin:2px 0 0; font-size:28px; }
-    .sub { color:#9ca9bd; font-size:14px; line-height:1.5; }
-    .status { background:#0d1219; border:1px solid #263247; border-radius:16px; padding:14px; min-height:120px; }
-    .row { display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid #1f2a3b; font-size:15px; }
-    .row span:last-child { overflow-wrap:anywhere; word-break:break-word; text-align:right; min-width:0; }
-    .panel { min-width:0; }
+    .panel { display:block; width:100%; height:auto; margin:0 0 10px; background:#121720; border:1px solid #253044; border-radius:12px; overflow:visible; }
+    .camera-wrap { position:relative; display:block; width:100%; height:180px; background:#05070a; border-radius:12px; overflow:hidden; }
+    video { display:block; width:100%; height:180px; object-fit:contain; background:#05070a; }
+    .camera-overlay { position:absolute; top:10px; left:10px; right:10px; pointer-events:none; }
+    .pill { display:inline-block; padding:6px 10px; background:rgba(8,12,18,.8); border:1px solid #384359; border-radius:20px; font-size:13px; }
+    #clock { float:right; }
+    .right { padding:12px; }
+    h1 { margin:0 0 6px; font-size:22px; }
+    .sub { color:#aab7cb; font-size:14px; line-height:1.5; margin-bottom:10px; }
+    .status,.transcript { display:block; height:auto; margin:0 0 10px; padding:10px; border:1px solid #263247; border-radius:10px; background:#0d1219; overflow:visible; }
+    .row { display:block; padding:8px 0; border-bottom:1px solid #1f2a3b; font-size:14px; line-height:1.5; }
     .row:last-child { border-bottom:0; }
-    .ok { color:#53d98c; }
-    .bad { color:#ff6b6b; }
-    .warn { color:#ffd166; }
-    .transcript { flex:1; min-height:0; background:#0d1219; border:1px solid #263247; border-radius:16px; padding:14px; overflow:auto; }
-    .transcript h2 { margin:0 0 10px; font-size:17px; }
-    #text { color:#e8edf6; line-height:1.55; white-space:pre-wrap; }
-    .footer { color:#7f8ba0; font-size:12px; line-height:1.45; }
-    @media (max-width: 900px) {
-      .app { grid-template-columns:1fr; grid-template-rows: 1fr auto; padding:10px; gap:10px; }
-      .right { padding:12px; min-height:480px; }
-      .bottom-bar { grid-template-columns:1fr 1fr; }
-
-    }
+    .row span { display:inline-block; vertical-align:top; }
+    .row span:first-child { width:30%; }
+    .row span:last-child { width:68%; text-align:right; overflow-wrap:break-word; word-break:break-word; }
+    .ok { color:#53d98c; } .bad { color:#ff7b7b; } .warn { color:#ffd166; }
+    .transcript h2 { margin:0 0 8px; font-size:17px; }
+    #text,#deviceInfo { font-size:14px; line-height:1.5; white-space:pre-wrap; overflow-wrap:break-word; word-break:break-word; }
+    .footer { color:#9aa7bc; font-size:12px; line-height:1.5; }
+    details { margin:12px 0; } summary { cursor:pointer; padding:8px 0; }
+    @media (min-width:1000px) { .camera-wrap,video { height:260px; } button { width:23%; } }
   </style>
 </head>
 <body>
 <div class="app">
-  <section class="panel left">
-    <div class="camera-wrap">
-      <video id="video" autoplay playsinline muted></video>
-      <div class="camera-overlay">
-        <div class="pill">V10 TEST v2</div>
-        <div class="pill" id="clock">--:--</div>
-      </div>
-    </div>
+  <header class="toolbar">
+    <div class="toolbar-title">V10 TEST v3 · 操作按钮</div>
     <div class="bottom-bar">
       <button class="secondary" id="btnFullscreen">⛶ 全屏</button>
       <button class="primary" id="btnMic">🎙️ 钉钉录音测试</button>
       <button class="primary" id="btnWebMic">🎤 网页麦克风测试</button>
       <button class="secondary" id="btnCamera">📷 开启摄像头</button>
     </div>
+  </header>
+  <section class="panel left">
+    <div class="camera-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="camera-overlay">
+        <div class="pill">V10 TEST v3</div>
+        <div class="pill" id="clock">--:--</div>
+      </div>
+    </div>
+
   </section>
 
   <aside class="panel right">
@@ -84,6 +84,7 @@
       <div id="text">录音成功后，如果当前钉钉 H5 微应用拥有 JSAPI 权限，这里会显示识别文字。</div>
     </div>
 
+    <details><summary>设备信息（点开查看）</summary><div id="deviceInfo"></div></details>
     <div class="footer">
       普通聊天链接可以测试摄像头/全屏；钉钉原生录音 startRecord / stopRecord / translateVoice 通常需要把此页面配置成“钉钉 H5 微应用”并完成 JSAPI 鉴权。
     </div>
@@ -107,7 +108,8 @@
   set('sWeb', window.isSecureContext ? '安全上下文' : '非安全上下文：摄像头可能不可用', window.isSecureContext ? 'ok' : 'warn');
   let ddReady = false;
   let cameraStream = null;
-  $('text').textContent = '设备：' + navigator.userAgent + '\nSDK 的存在不代表原生接口可用或已完成鉴权。';
+  $('deviceInfo').textContent = navigator.userAgent;
+  $('text').textContent = '先点页面顶部“网页麦克风测试”，说几秒后停止并回放。录音仅保存在当前页面。';
 
   // DingTalk JSAPI detect
   function detectDD(){
@@ -154,6 +156,12 @@
       alert('全屏失败：' + e.message);
     }
   });
+
+  function syncFullscreen() {
+    $('btnFullscreen').textContent = (document.fullscreenElement || document.webkitFullscreenElement) ? '✓ 已全屏' : '⛶ 全屏';
+  }
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  document.addEventListener('webkitfullscreenchange', syncFullscreen);
 
   // DingTalk native recording
   let recording = false;
