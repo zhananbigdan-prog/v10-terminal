@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0d12" />
+  <title>V10 AI Terminal</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin:0; width:100%; height:100%; background:#0a0d12; color:#fff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; overflow:auto; }
+    body { display:flex; align-items:stretch; justify-content:stretch; }
+    .app { width:100vw; height:100vh; display:grid; grid-template-columns: 1.25fr .75fr; gap:18px; padding:18px; }
+    .panel { background:#121720; border:1px solid #253044; border-radius:22px; overflow:hidden; }
+    .left { position:relative; display:flex; flex-direction:column; }
+    .camera-wrap { position:relative; flex:1; min-height:0; background:#05070a; }
+    video { width:100%; height:100%; object-fit:cover; background:#05070a; }
+    .camera-overlay { position:absolute; left:18px; top:18px; right:18px; display:flex; justify-content:space-between; align-items:center; pointer-events:none; }
+    .pill { background:rgba(8,12,18,.72); backdrop-filter: blur(12px); border:1px solid rgba(255,255,255,.12); border-radius:999px; padding:9px 14px; font-size:15px; }
+    .bottom-bar { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; padding:14px; background:#0f141c; }
+    button { min-height:58px; border:0; border-radius:16px; font-size:18px; font-weight:700; cursor:pointer; }
+    button.primary { background:#fff; color:#111; }
+    button.secondary { background:#253044; color:#fff; }
+    button.recording { background:#ef4444; color:#fff; }
+    button:disabled { opacity:.45; }
+    .right { padding:18px; display:flex; flex-direction:column; gap:14px; }
+    h1 { margin:2px 0 0; font-size:28px; }
+    .sub { color:#9ca9bd; font-size:14px; line-height:1.5; }
+    .status { background:#0d1219; border:1px solid #263247; border-radius:16px; padding:14px; min-height:120px; }
+    .row { display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid #1f2a3b; font-size:15px; }
+    .row span:last-child { overflow-wrap:anywhere; text-align:right; min-width:0; }
+    .panel { min-width:0; }
+    .row:last-child { border-bottom:0; }
+    .ok { color:#53d98c; }
+    .bad { color:#ff6b6b; }
+    .warn { color:#ffd166; }
+    .transcript { flex:1; min-height:0; background:#0d1219; border:1px solid #263247; border-radius:16px; padding:14px; overflow:auto; }
+    .transcript h2 { margin:0 0 10px; font-size:17px; }
+    #text { color:#e8edf6; line-height:1.55; white-space:pre-wrap; }
+    .footer { color:#7f8ba0; font-size:12px; line-height:1.45; }
+    @media (max-width: 900px) {
+      .app { grid-template-columns:1fr; grid-template-rows: 1fr auto; padding:10px; gap:10px; }
+      .right { padding:12px; max-height:42vh; }
+      .bottom-bar { grid-template-columns:1fr 1fr; }
+      #btnCamera { grid-column:1 / -1; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <section class="panel left">
+    <div class="camera-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="camera-overlay">
+        <div class="pill">V10 AI TERMINAL</div>
+        <div class="pill" id="clock">--:--</div>
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <button class="secondary" id="btnFullscreen">⛶ 全屏</button>
+      <button class="primary" id="btnMic">🎙️ 按一下开始说话</button>
+      <button class="secondary" id="btnCamera">📷 开启摄像头</button>
+    </div>
+  </section>
+
+  <aside class="panel right">
+    <div>
+      <h1>你好 👋</h1>
+      <div class="sub">这是天猫精灵 V10 的硬件能力诊断页（尚未接入 AI）。先验证全屏、摄像头和钉钉原生录音。</div>
+    </div>
+
+    <div class="status">
+      <div class="row"><span>网页环境</span><span id="sWeb">检测中</span></div>
+      <div class="row"><span>摄像头</span><span id="sCam">未测试</span></div>
+      <div class="row"><span>钉钉 JSAPI</span><span id="sDD">检测中</span></div>
+      <div class="row"><span>麦克风录音</span><span id="sMic">未测试</span></div>
+      <div class="row"><span>录音 mediaId</span><span id="sMedia">-</span></div>
+    </div>
+
+    <div class="transcript">
+      <h2>语音转文字</h2>
+      <div id="text">录音成功后，如果当前钉钉 H5 微应用拥有 JSAPI 权限，这里会显示识别文字。</div>
+    </div>
+
+    <div class="footer">
+      普通聊天链接可以测试摄像头/全屏；钉钉原生录音 startRecord / stopRecord / translateVoice 通常需要把此页面配置成“钉钉 H5 微应用”并完成 JSAPI 鉴权。
+    </div>
+  </aside>
+</div>
+
+<script src="https://g.alicdn.com/dingding/dingtalk-jsapi/3.1.0/dingtalk.open.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const set = (id, text, cls='') => {
+    const el = $(id); el.textContent = text; el.className = cls;
+  };
+
+  function tick(){
+    const d = new Date();
+    $('clock').textContent = d.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+  }
+  tick(); setInterval(tick, 1000);
+
+  set('sWeb', window.isSecureContext ? '安全上下文' : '非安全上下文：摄像头可能不可用', window.isSecureContext ? 'ok' : 'warn');
+  let ddReady = false;
+  let cameraStream = null;
+  $('text').textContent = '设备：' + navigator.userAgent + '\nSDK 的存在不代表原生接口可用或已完成鉴权。';
+
+  // DingTalk JSAPI detect
+  function detectDD(){
+    if (window.dd) {
+      set('sDD', 'SDK 已加载；原生能力待测试', 'warn');
+      return true;
+    }
+    set('sDD', 'SDK 未加载，请检查网络', 'warn');
+    return false;
+  }
+  detectDD();
+
+  // Camera
+  $('btnCamera').addEventListener('click', async () => {
+    try {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null; $('video').srcObject = null;
+        set('sCam', '已关闭'); $('btnCamera').textContent = '📷 开启摄像头'; return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('当前 WebView 不支持 getUserMedia');
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({video:true, audio:false});
+      cameraStream = stream;
+      $('video').srcObject = stream;
+      await $('video').play();
+      set('sCam', '已开启', 'ok');
+      $('btnCamera').textContent = '📷 关闭摄像头';
+    } catch (e) {
+      set('sCam', e.name + ': ' + e.message, 'bad');
+    }
+  });
+
+  // Fullscreen
+  $('btnFullscreen').addEventListener('click', async () => {
+    const el = document.documentElement;
+    try {
+      const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+      if (!fn) throw new Error('Fullscreen API 不支持');
+      await fn.call(el);
+      $('btnFullscreen').textContent = '✓ 已全屏';
+    } catch (e) {
+      alert('全屏失败：' + e.message);
+    }
+  });
+
+  // DingTalk native recording
+  let recording = false;
+  let lastDuration = 0;
+  let lastMediaId = '';
+
+  function ddCall(name, opts) {
+    return new Promise((resolve, reject) => {
+      if (!ddReady) { reject(new Error('SDK 尚未就绪；请检查容器、网络及微应用鉴权')); return; }
+      const audio = window.dd && window.dd.device && window.dd.device.audio;
+      const owner = window.dd && typeof window.dd[name] === 'function' ? window.dd : audio;
+      if (!owner || typeof owner[name] !== 'function') {
+        reject(new Error('录音接口 ' + name + ' 不存在')); return;
+      }
+      let done = false;
+      const timer = setTimeout(() => finish(new Error(name + ' 30秒未回调，设备录音状态未知；停止操作并关闭页面后重试')), 30000);
+      function finish(err, res) {
+        if (done) return; done = true; clearTimeout(timer);
+        err ? reject(err) : resolve(res || {});
+      }
+      const success = res => finish(null, res);
+      const fail = err => finish(new Error(JSON.stringify(err || {})));
+      try { owner[name](Object.assign({}, opts || {}, {success, fail, onSuccess:success, onFail:fail})); }
+      catch (err) { finish(err); }
+    });
+  }
+
+  async function startRecord(){
+    if (!detectDD()) {
+      set('sMic', '需要钉钉 H5 微应用 JSAPI', 'warn');
+      return;
+    }
+    try {
+      await ddCall('startRecord');
+      recording = true;
+      set('sMic', '正在录音…', 'ok');
+      $('btnMic').textContent = '⏹️ 点一下停止录音';
+      $('btnMic').className = 'recording';
+    } catch (e) {
+      set('sMic', e.message, 'bad');
+    }
+  }
+
+  async function stopRecord(){
+    try {
+      const res = await ddCall('stopRecord');
+      recording = false;
+      $('btnMic').textContent = '🎙️ 按一下开始说话';
+      $('btnMic').className = 'primary';
+
+      lastDuration = Number(res.duration || 0);
+      lastMediaId = res.mediaId || '';
+      set('sMic', '录音完成 ' + (lastDuration ? lastDuration + 's' : ''), 'ok');
+      set('sMedia', lastMediaId ? String(lastMediaId).slice(0,18) + '…' : '未返回 mediaId', lastMediaId ? 'ok' : 'warn');
+
+      if (lastMediaId) {
+        $('text').textContent = '正在转文字…';
+        try {
+          const tr = await ddCall('translateVoice', { duration: Math.max(1, lastDuration || 1), mediaId: lastMediaId });
+          $('text').textContent = tr.content || '转写成功，但返回内容为空';
+        } catch (e) {
+          $('text').textContent = '录音成功，但 translateVoice 失败：\n' + e.message;
+        }
+      } else {
+        $('text').textContent = '录音已结束。当前环境没有 translateVoice 权限或没有拿到 mediaId。';
+      }
+    } catch (e) {
+      recording = false;
+      $('btnMic').textContent = '🎙️ 按一下开始说话';
+      $('btnMic').className = 'primary';
+      set('sMic', e.message, 'bad');
+    }
+  }
+
+  $('btnMic').addEventListener('click', async () => {
+    $('btnMic').disabled = true;
+    try { await (recording ? stopRecord() : startRecord()); }
+    finally { $('btnMic').disabled = false; }
+  });
+  window.addEventListener('pagehide', () => {
+    if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+  });
+
+  // Try dd.ready if available
+  try {
+    if (window.dd && typeof window.dd.ready === 'function') {
+      window.dd.ready(() => {
+        ddReady = true;
+        set('sDD', 'SDK 就绪；录音权限待实测', 'warn');
+      });
+      // 可由后续服务端签名集成调用；此页面不包含企业密钥。
+      window.configureDingTalk = function(config) { window.dd.config(config); };
+      if (typeof window.dd.error === 'function') {
+        window.dd.error(err => set('sDD', 'dd.error: ' + ((err && (err.errorMessage || err.message)) || '未知错误'), 'bad'));
+      }
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
