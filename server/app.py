@@ -1,5 +1,5 @@
 """Private local companion backend. Secrets stay here, never in the Pages site."""
-import base64, binascii, datetime, hmac, importlib.util, io, json, os, pathlib, shutil
+import base64, binascii, datetime, hmac, hashlib, importlib.util, io, json, os, pathlib, shutil
 import subprocess, tempfile, threading, urllib.request, urllib.error, wave, time, secrets
 from http.cookies import SimpleCookie
 from urllib.parse import parse_qs, urlsplit
@@ -12,6 +12,10 @@ for line in (ROOT / '.env.local').read_text().splitlines() if (ROOT / '.env.loca
         os.environ.setdefault(key.strip(), value.strip().strip('\"\''))
 KEY = os.getenv('DEEPSEEK_API_KEY', '')
 TOKEN = os.getenv('COMPANION_TOKEN', '')
+
+def browser_token():
+    # A separate bearer for paired browsers; never expose the server access token.
+    return hmac.new(TOKEN.encode(), b'v10-paired-browser-v1', hashlib.sha256).hexdigest()
 ALLOWED = os.getenv('COMPANION_ORIGIN', 'https://zhananbigdan-prog.github.io')
 MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek-flash')
 STT_MODEL = os.getenv('WHISPER_MODEL_PATH', '')
@@ -104,13 +108,13 @@ class Handler(BaseHTTPRequestHandler):
         pass  # Do not log conversations, tokens, paths or audio.
 
     def origin_ok(self):
-        return self.headers.get('Origin') in (None, ALLOWED, PUBLIC_ORIGIN)
+        return self.headers.get('Origin') in (None, 'null', ALLOWED, PUBLIC_ORIGIN)
 
     def send_json(self, status, body):
         data = json.dumps(body, ensure_ascii=False).encode()
         self.send_response(status)
-        if self.headers.get('Origin') == ALLOWED:
-            self.send_header('Access-Control-Allow-Origin', ALLOWED)
+        if self.headers.get('Origin') in (ALLOWED, PUBLIC_ORIGIN, 'null'):
+            self.send_header('Access-Control-Allow-Origin', self.headers.get('Origin'))
         self.send_header('Vary', 'Origin')
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Cache-Control', 'no-store')
@@ -120,8 +124,10 @@ class Handler(BaseHTTPRequestHandler):
     def authorized(self):
         if not TOKEN or not self.origin_ok():
             return False
-        if hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + TOKEN):
+        if any(hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + candidate) for candidate in (TOKEN, browser_token())):
             return True
+        if self.headers.get('Origin') == 'null':
+            return False  # Opaque origins must present the paired bearer, not ambient cookies.
         try:
             cookie = SimpleCookie(self.headers.get('Cookie', ''))
             return 'companion_session' in cookie and hmac.compare_digest(cookie['companion_session'].value, TOKEN)
@@ -172,7 +178,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.origin_ok():
             return self.send_json(403, {'error': '来源未允许'})
         self.send_response(204)
-        self.send_header('Access-Control-Allow-Origin', ALLOWED)
+        self.send_header('Access-Control-Allow-Origin', self.headers.get('Origin') or ALLOWED)
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Authorization, Content-Type')
         self.send_header('Access-Control-Max-Age', '600')
@@ -184,7 +190,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized():
                 return self.pair_page()
             page = (ROOT / 'index.html').read_text()
-            page = page.replace('<script src="core.js', '<script>window.COMPANION_COOKIE=true;window.COMPANION_ENDPOINT=location.origin;</script><script src="core.js', 1)
+            page = page.replace('<script src="core.js', '<script>window.COMPANION_COOKIE=true;window.COMPANION_ENDPOINT=location.origin;window.COMPANION_SESSION=' + json.dumps(browser_token()) + ';</script><script src="core.js', 1)
             return self.send_page(page)
         static = {'/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/core.js': ('core.js', 'text/javascript; charset=utf-8'), '/styles.css': ('styles.css', 'text/css; charset=utf-8'), '/diagnostics/v4.html': ('diagnostics/v4.html', 'text/html; charset=utf-8')}
         if path in static:
