@@ -1,53 +1,36 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#eaf4ff"><title>小蓝 · 化妆桌上的 AI 伙伴</title><link rel="stylesheet" href="styles.css?v=6"></head>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#eaf4ff"><title>天猫精灵 · 化妆桌上的 AI 伙伴</title><link rel="stylesheet" href="styles.css?v=9"></head>
 <body>
 <div id="app" class="shell">
- <header class="topbar"><div class="brand"><span class="brand-dot"></span><b id="brandName">小蓝</b><span class="tag">你的早晨搭子</span></div><nav><button id="fullscreen" class="iconbtn">全屏</button><button id="sleepNow" class="iconbtn">晚安</button><button id="settingsOpen" class="iconbtn" aria-label="打开设置">设置</button></nav></header>
+ <header class="topbar"><div class="brand"><span class="brand-dot"></span><b id="brandName">天猫精灵</b><span class="tag">你的早晨搭子</span></div><nav><button id="fullscreen" class="iconbtn">全屏</button><button id="sleepNow" class="iconbtn">晚安</button><button id="settingsOpen" class="iconbtn" aria-label="打开设置">设置</button></nav></header>
  <main class="dashboard">
   <section class="companion">
    <div class="eyebrow"><span id="dateText">今天</span><span id="connection" class="connection">AI 尚未连接</span></div>
    <div id="avatar" class="avatar idle" role="img" aria-label="流动的蓝白语音圆球">
-    <svg class="voice-orb" viewBox="0 0 320 280" aria-hidden="true">
-     <defs>
-      <radialGradient id="orbBase" cx=".3" cy=".2" r=".9"><stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#effaff"/><stop offset="1" stop-color="#a5d4fa"/></radialGradient>
-      <linearGradient id="waveBlue" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#d8f3ff"/><stop offset=".45" stop-color="#73c6f7"/><stop offset="1" stop-color="#468ce8"/></linearGradient>
-      <linearGradient id="waveWhite" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#effaff" stop-opacity=".5"/></linearGradient>
-      <clipPath id="orbClip"><circle cx="160" cy="137" r="105"/></clipPath>
-     </defs>
-     <g class="orb-body">
-      <circle class="orb-aura" cx="160" cy="137" r="116" fill="#d7ecfb" opacity=".35"/>
-      <circle cx="160" cy="137" r="105" fill="url(#orbBase)"/>
-      <g clip-path="url(#orbClip)">
-       <g class="orb-wave wave-back"><path d="M-170 114C-110 59 -55 59 5 114S120 169 180 114S295 59 355 114S470 169 530 114S645 59 705 114V320H-170Z" fill="url(#waveBlue)" opacity=".7"/></g>
-       <g class="orb-wave wave-middle"><path d="M-170 140C-110 91 -55 91 5 140S120 189 180 140S295 91 355 140S470 189 530 140S645 91 705 140V320H-170Z" fill="url(#waveWhite)"/></g>
-       <g class="orb-wave wave-front"><path d="M-170 175C-110 130 -55 130 5 175S120 220 180 175S295 130 355 175S470 220 530 175S645 130 705 175V320H-170Z" fill="#6eb9f0" opacity=".55"/></g>
-       <g class="orb-wave wave-glint"><path d="M-170 198C-110 164 -55 164 5 198S120 232 180 198S295 164 355 198S470 232 530 198S645 164 705 198V320H-170Z" fill="#fff" opacity=".8"/></g>
-      </g>
-      <circle cx="160" cy="137" r="104.5" fill="none" stroke="#fff" stroke-opacity=".55"/>
-     </g>
-    </svg>
+    <div class="cloud-orb"><div class="cloud cloud-one"></div><div class="cloud cloud-two"></div><div class="cloud cloud-three"></div></div>
    </div>
    <div id="stateLabel" class="state-label">在这里陪着你</div>
    <h1 id="headline">慢慢来，今天也很好看。</h1>
-   <p id="subtitle">点一下说话，或者先看看今天穿什么。</p>
-   <div class="voice-controls"><button id="talk" class="talk">开始说话 <span>●</span></button><button id="stopSpeech" class="quietbtn">停止播放</button></div>
-   <div class="meter"><div id="meterFill"></div></div><p id="recordInfo" class="microcopy">V8 · 本地录音已验证 · AI 服务待连接</p>
+   <p id="subtitle">开启免提后，说“天猫精灵”。初次使用可能需要点一次以允许麦克风和声音。</p>
+   <div class="voice-controls"><button id="talk" class="talk">开始说话 <span>●</span></button><button id="handsfree" class="quietbtn">开启免提</button><button id="muteMic" class="quietbtn" aria-pressed="false">麦克风静音</button><button id="stopSpeech" class="quietbtn">停止</button></div>
+   <div class="meter"><div id="meterFill"></div></div><p id="recordInfo" class="microcopy">V9 · 本地录音已验证 · AI 服务待连接</p>
    <div class="quick-actions"><button id="connectAI">连接 AI</button><button id="askWeather">今天穿什么？</button><button id="greet">和我打个招呼</button><button id="replay" disabled>回放我的录音</button></div>
    <audio id="audio" controls style="display:none;width:100%"></audio>
   </section>
-  <section class="daily">
+  <details class="daily-details"><summary>天气与对话记录</summary><section class="daily">
    <article class="weather-card"><div class="card-top"><span><span id="cityLabel">如皋</span> · 今天</span><button id="weatherRefresh" class="textbtn">刷新 ↗</button></div><div class="weather-main"><div><strong id="temp">—°</strong><span id="weatherDesc">等待天气数据</span></div><div class="weather-symbol">☀</div></div><div class="weather-details"><span id="feels">体感 —°</span><span id="range">— / —°</span><span id="rain">降雨 —</span></div><div class="divider"></div><p class="small-label">出门的小建议</p><p id="outfit" class="outfit">正在查询天气，暂不猜测温度和穿衣厚度。</p><p id="weatherSource" class="microcopy">来源：Open-Meteo · 预报数据</p></article>
-   <article class="conversation"><div class="card-top"><span>我们刚刚聊到</span><span id="chatBadge" class="small-label">尚未连接 AI</span></div><div id="messages" class="messages" aria-live="polite"><p class="empty">你的录音会先在这台屏幕上采集。连接服务后，点击说话才会发送给 AI。</p></div><form id="textForm"><input id="textInput" maxlength="1000" placeholder="也可以打字问我…" aria-label="输入问题"><button type="submit">发送</button></form></article>
-  </section>
+   <article class="conversation"><div class="card-top"><span>我们刚刚聊到</span><span id="chatBadge" class="small-label">尚未连接 AI</span></div><div id="messages" class="messages" aria-live="polite"><p class="empty">免提开启后，有声音的短片段会发送到你自己的 Mac 做本地识别。唤醒后的问题才交给 DeepSeek；静音会停止麦克风采集。</p></div><form id="textForm"><input id="textInput" maxlength="1000" placeholder="也可以打字问我…" aria-label="输入问题"><button type="submit">发送</button></form></article>
+  </section></details>
  </main><footer><span>一小会儿陪伴，一整天好心情。</span><a href="diagnostics/v4.html">录音诊断 v4</a><span id="scheduleNote">夜间：22:30 — 07:00</span></footer>
 </div>
-<section id="settings" class="modal" hidden><div class="settings-card"><div class="card-top"><h2>让小蓝更懂你的早晨</h2><button id="settingsClose" class="iconbtn">关闭</button></div><form id="settingsForm">
+<section id="settings" class="modal" hidden><div class="settings-card"><div class="card-top"><h2>让天猫精灵更懂你的早晨</h2><button id="settingsClose" class="iconbtn">关闭</button></div><form id="settingsForm">
  <label>伙伴的名字<input id="nameSetting" maxlength="12"></label>
  <div class="setting-row"><label>城市名<input id="citySetting" maxlength="30"></label><label>纬度<input id="latSetting" type="number" min="-90" max="90" step="any"></label><label>经度<input id="lonSetting" type="number" min="-180" max="180" step="any"></label></div><p class="microcopy">默认如皋城区。更换城市时同步修改坐标；只用于查询城市天气。</p>
+ <label class="check"><input id="scheduleSetting" type="checkbox"> 工作日双时段显示（周一至周五）</label><p class="microcopy">07:10–08:30、19:30–21:30，其余时间显示黑色页面。暂不包含节假日调休；网页无法关闭背光或唤醒已休眠的系统。</p>
  <label class="check"><input id="nightSetting" type="checkbox"> 按时间进入黑屏模式</label><div class="setting-row"><label>晚安时间<input id="bedSetting" type="time"></label><label>早晨亮屏<input id="wakeSetting" type="time"></label></div><p class="microcopy">黑屏是纯黑网页，不能保证关闭液晶背光。点屏幕可临时唤醒 2 分钟。</p>
  <label class="check"><input id="greetingSetting" type="checkbox"> 定时早安招呼（默认关闭）</label><label>早安时间<input id="greetTimeSetting" type="time"></label><p class="microcopy">仅在页面保持运行、已启用声音且系统允许播放时触发。不是手机闹钟识别，也不保证后台唤醒。</p>
  <details><summary>连接 DeepSeek 服务</summary><p class="microcopy">这里只填你自己的 HTTPS 后端地址及访问口令。DeepSeek API 密钥只能存后端，不能填在网页。</p><label>服务地址<input id="endpointSetting" type="url" placeholder="https://你的后端地址"></label><label>访问口令<input id="tokenSetting" type="password" autocomplete="off" placeholder="不是 DeepSeek API 密钥"></label></details>
  <button class="talk save" type="submit">保存设置</button><p id="saveResult" class="microcopy"></p>
  </form><button id="connectTest" class="quietbtn">检查服务连接</button></div></section>
 <div id="night" class="night" hidden role="button" tabindex="0" aria-label="夜间黑屏，点击临时唤醒"></div>
-<script src="core.js?v=6"></script><script src="app.js?v=8"></script></body></html>
+<script src="core.js?v=9"></script><script src="app.js?v=9"></script></body></html>
